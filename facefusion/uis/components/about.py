@@ -16,10 +16,6 @@ def render() -> None:
 	action = random.choice(
 	[
 		{
-			'wording': wording.get('about.become_a_member'),
-			'url': 'https://subscribe.facefusion.io'
-		},
-		{
 			'wording': wording.get('about.join_our_community'),
 			'url': 'https://join.facefusion.io'
 		},
@@ -29,11 +25,6 @@ def render() -> None:
 		}
 	])
 
-	METADATA_BUTTON = gradio.Button(
-		value = metadata.get('name') + ' ' + metadata.get('version'),
-		variant = 'primary',
-		link = metadata.get('url')
-	)
 	ACTION_BUTTON = gradio.Button(
 		value = action.get('wording'),
 		link = action.get('url'),

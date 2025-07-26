@@ -1,11 +1,31 @@
 import gradio
 
 from facefusion import state_manager
-from facefusion.uis.components import about, source, webcam
+from facefusion.uis.components import source, webcam
 
 
 def pre_check() -> bool:
 	return True
+
+
+def webcam_buttons():
+	# 웹캠 버튼만 표시하는 함수
+	start_button = gradio.Button(
+		value="START",
+		variant="primary",  # 기본 primary variant 사용
+		size="lg"
+	)
+	stop_button = gradio.Button(
+		value="STOP", 
+		variant="secondary",  # secondary variant 사용
+		size="lg"
+	)
+	
+	# 버튼 이벤트 연결
+	start_button.click(webcam.start_simple, outputs=None)
+	stop_button.click(webcam.stop, outputs=None)
+	
+	return start_button, stop_button
 
 
 def render() -> gradio.Blocks:
@@ -14,33 +34,28 @@ def render() -> gradio.Blocks:
 	state_manager.set_item('face_swapper_model', 'hyperswap_1a_256')
 	state_manager.set_item('face_swapper_pixel_boost', '256x256')
 	state_manager.set_item('execution_providers', ['cuda', 'tensorrt'])
-	state_manager.set_item('execution_thread_count', 16)
+	state_manager.set_item('execution_thread_count', 32)  # 8코어 16스레드 CPU에 최적화
 	state_manager.set_item('webcam_device_id', 0)
 	state_manager.set_item('webcam_mode', 'udp')
 	state_manager.set_item('webcam_resolution', '1280x720')
 	state_manager.set_item('webcam_fps', 30)
 
 	with gradio.Blocks(title="FaceFusion Simple Webcam") as layout:
-		with gradio.Row():
-			with gradio.Column(scale=4):
-				with gradio.Blocks():
-					about.render()
-				
-				# SOURCE만 선택 가능
-				with gradio.Blocks():
-					gradio.Markdown("### SOURCE 선택")
-					source.render()
+		with gradio.Column(scale=1):
+			# SOURCE만 선택 가능
+			with gradio.Blocks():
+				source.render()
 			
-			with gradio.Column(scale=11):
-				with gradio.Blocks():
-					webcam.render()
+			# 웹캠 버튼만 표시 (화면 제거)
+			with gradio.Blocks():
+				start_btn, stop_btn = webcam_buttons()
 	
 	return layout
 
 
 def listen() -> None:
 	source.listen()
-	webcam.listen()
+	# 웹캠 컴포넌트의 listen은 더 이상 필요하지 않음
 
 
 def run(ui: gradio.Blocks) -> None:
