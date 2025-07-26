@@ -75,13 +75,81 @@ def listen() -> None:
 	webcam_resolution_dropdown = get_ui_component('webcam_resolution_dropdown')
 	webcam_fps_slider = get_ui_component('webcam_fps_slider')
 	source_image = get_ui_component('source_image')
+	start_event = None
 
 	if webcam_device_id_dropdown and webcam_mode_radio and webcam_resolution_dropdown and webcam_fps_slider:
+		# 일반적인 웹캠 레이아웃에서 사용
 		start_event = WEBCAM_START_BUTTON.click(start, inputs = [ webcam_device_id_dropdown, webcam_mode_radio, webcam_resolution_dropdown, webcam_fps_slider ], outputs = WEBCAM_IMAGE)
 		WEBCAM_STOP_BUTTON.click(stop, cancels = start_event, outputs = WEBCAM_IMAGE)
+	else:
+		# 간단한 웹캠 레이아웃에서 사용 - 고정된 값들 사용
+		start_event = WEBCAM_START_BUTTON.click(start_simple, outputs = WEBCAM_IMAGE)
+		WEBCAM_STOP_BUTTON.click(stop, cancels = start_event, outputs = WEBCAM_IMAGE)
 
-	if source_image:
+	if source_image and start_event:
 		source_image.change(stop, cancels = start_event, outputs = WEBCAM_IMAGE)
+	elif source_image:
+		# UI 컴포넌트들이 없는 경우에도 source_image 변경 시 stop 호출
+		source_image.change(stop, outputs = WEBCAM_IMAGE)
+
+
+def start_simple() -> Generator[VisionFrame, None, None]:
+	# 간단한 웹캠 레이아웃용 - 고정된 값들 사용
+	webcam_device_id = 0
+	webcam_mode = 'udp'
+	webcam_resolution = '1280x720'
+	webcam_fps = 30
+	
+	# start 함수의 내용을 직접 복사해서 generator로 yield
+	state_manager.set_item('face_selector_mode', 'one')
+	source_image_paths = filter_image_paths(state_manager.get_item('source_paths'))
+	source_frames = read_static_images(source_image_paths)
+	source_faces = get_many_faces(source_frames)
+	source_face = get_average_face(source_faces)
+	stream = None
+	webcam_capture = None
+
+	if webcam_mode in [ 'udp', 'v4l2' ]:
+		stream = open_stream(webcam_mode, webcam_resolution, webcam_fps) #type:ignore[arg-type]
+	webcam_width, webcam_height = unpack_resolution(webcam_resolution)
+
+	if isinstance(webcam_device_id, int):
+		webcam_capture = get_webcam_capture(webcam_device_id)
+
+	if webcam_capture and webcam_capture.isOpened():
+		webcam_capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG')) #type:ignore[attr-defined]
+		webcam_capture.set(cv2.CAP_PROP_FRAME_WIDTH, webcam_width)
+		webcam_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, webcam_height)
+		webcam_capture.set(cv2.CAP_PROP_FPS, webcam_fps)
+
+		# source_face가 None이어도 웹캠이 작동하도록 수정
+		if source_face is None:
+			# source_face가 없으면 원본 프레임만 반환
+			while webcam_capture and webcam_capture.isOpened():
+				_, capture_frame = webcam_capture.read()
+				if analyse_stream(capture_frame, webcam_fps):
+					yield None
+				capture_frame = normalize_frame_color(capture_frame)
+				if webcam_mode == 'inline':
+					yield capture_frame
+				else:
+					try:
+						stream.stdin.write(capture_frame.tobytes())
+					except Exception:
+						clear_webcam_capture()
+					yield None
+		else:
+			# source_face가 있으면 face swap 처리
+			for capture_frame in multi_process_capture(source_face, webcam_capture, webcam_fps):
+				capture_frame = normalize_frame_color(capture_frame)
+				if webcam_mode == 'inline':
+					yield capture_frame
+				else:
+					try:
+						stream.stdin.write(capture_frame.tobytes())
+					except Exception:
+						clear_webcam_capture()
+					yield None
 
 
 def start(webcam_device_id : int, webcam_mode : WebcamMode, webcam_resolution : str, webcam_fps : Fps) -> Generator[VisionFrame, None, None]:
@@ -106,16 +174,34 @@ def start(webcam_device_id : int, webcam_mode : WebcamMode, webcam_resolution : 
 		webcam_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, webcam_height)
 		webcam_capture.set(cv2.CAP_PROP_FPS, webcam_fps)
 
-		for capture_frame in multi_process_capture(source_face, webcam_capture, webcam_fps):
-			capture_frame = normalize_frame_color(capture_frame)
-			if webcam_mode == 'inline':
-				yield capture_frame
-			else:
-				try:
-					stream.stdin.write(capture_frame.tobytes())
-				except Exception:
-					clear_webcam_capture()
-				yield None
+		# source_face가 None이어도 웹캠이 작동하도록 수정
+		if source_face is None:
+			# source_face가 없으면 원본 프레임만 반환
+			while webcam_capture and webcam_capture.isOpened():
+				_, capture_frame = webcam_capture.read()
+				if analyse_stream(capture_frame, webcam_fps):
+					yield None
+				capture_frame = normalize_frame_color(capture_frame)
+				if webcam_mode == 'inline':
+					yield capture_frame
+				else:
+					try:
+						stream.stdin.write(capture_frame.tobytes())
+					except Exception:
+						clear_webcam_capture()
+					yield None
+		else:
+			# source_face가 있으면 face swap 처리
+			for capture_frame in multi_process_capture(source_face, webcam_capture, webcam_fps):
+				capture_frame = normalize_frame_color(capture_frame)
+				if webcam_mode == 'inline':
+					yield capture_frame
+				else:
+					try:
+						stream.stdin.write(capture_frame.tobytes())
+					except Exception:
+						clear_webcam_capture()
+					yield None
 
 
 def multi_process_capture(source_face : Face, webcam_capture : cv2.VideoCapture, webcam_fps : Fps) -> Generator[VisionFrame, None, None]:

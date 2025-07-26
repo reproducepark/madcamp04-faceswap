@@ -22,23 +22,23 @@ def render() -> None:
 
 	available_webcam_ids = get_available_webcam_ids(0, 10) or [ 'none' ] #type:ignore[list-item]
 	WEBCAM_DEVICE_ID_DROPDOWN = gradio.Dropdown(
-		value = get_first(available_webcam_ids),
+		value = 0,
 		label = wording.get('uis.webcam_device_id_dropdown'),
 		choices = available_webcam_ids
 	)
 	WEBCAM_MODE_RADIO = gradio.Radio(
 		label = wording.get('uis.webcam_mode_radio'),
 		choices = facefusion.choices.webcam_modes,
-		value = 'inline'
+		value = 'udp'
 	)
 	WEBCAM_RESOLUTION_DROPDOWN = gradio.Dropdown(
 		label = wording.get('uis.webcam_resolution_dropdown'),
 		choices = facefusion.choices.webcam_resolutions,
-		value = facefusion.choices.webcam_resolutions[0]
+		value = '1280x720'
 	)
 	WEBCAM_FPS_SLIDER = gradio.Slider(
 		label = wording.get('uis.webcam_fps_slider'),
-		value = 25,
+		value = 30,
 		step = 1,
 		minimum = 1,
 		maximum = 60
@@ -47,3 +47,9 @@ def render() -> None:
 	register_ui_component('webcam_mode_radio', WEBCAM_MODE_RADIO)
 	register_ui_component('webcam_resolution_dropdown', WEBCAM_RESOLUTION_DROPDOWN)
 	register_ui_component('webcam_fps_slider', WEBCAM_FPS_SLIDER)
+
+
+def listen() -> None:
+	# 웹캠 옵션 컴포넌트들의 이벤트 리스너
+	# 현재는 고정된 값들을 사용하므로 별도의 이벤트 처리가 필요하지 않음
+	pass
